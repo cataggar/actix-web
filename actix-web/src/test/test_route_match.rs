@@ -48,7 +48,7 @@ where
         .uri(path)
         .method(method)
         .to_request();
-    
+
     // Call the service to get a properly initialized ServiceRequest with resource map
     let res = service.call(req).await.ok()?;
     let req = res.request();
@@ -91,7 +91,7 @@ where
         .uri(path)
         .method(method)
         .to_request();
-    
+
     // Call the service to get a properly initialized ServiceRequest with resource map
     let res = service.call(req).await.ok()?;
     let req = res.request();
