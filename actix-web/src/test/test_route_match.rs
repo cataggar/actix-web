@@ -9,33 +9,33 @@ use crate::{
     Error,
 };
 
-/// Returns the name of the route that matches the given path and method in an initialized service.
+/// Returns the name of the resource that matches the given path and method in an initialized service.
 ///
 /// This function does not execute the handler; it only performs route matching to determine
-/// which named route would handle the request.
+/// which named resource would handle the request.
 ///
 /// # Examples
 /// ```
 /// use actix_web::{test, web, App, http::Method};
 ///
 /// #[actix_web::test]
-/// async fn test_match_route_name() {
+/// async fn test_match_resource_name() {
 ///     let app = test::init_service(
 ///         App::new()
 ///             .service(web::resource("/api/users").name("users").to(|| async { "users" }))
 ///     ).await;
 ///
 ///     assert_eq!(
-///         test::match_route_name(&app, "/api/users", Method::GET).await,
+///         test::match_resource_name(&app, "/api/users", Method::GET).await,
 ///         Some("users".to_string())
 ///     );
 ///     assert_eq!(
-///         test::match_route_name(&app, "/api/unknown", Method::GET).await,
+///         test::match_resource_name(&app, "/api/unknown", Method::GET).await,
 ///         None
 ///     );
 /// }
 /// ```
-pub async fn match_route_name<S, B>(
+pub async fn match_resource_name<S, B>(
     service: &S,
     path: &str,
     method: Method,
@@ -104,7 +104,7 @@ mod tests {
     use crate::{test, web, App};
 
     #[actix_rt::test]
-    async fn test_match_route_name_basic() {
+    async fn test_match_resource_name_basic() {
         let app = test::init_service(
             App::new()
                 .service(web::resource("/users/{id}").name("user").to(|| async { "user" }))
@@ -113,15 +113,15 @@ mod tests {
         .await;
 
         assert_eq!(
-            match_route_name(&app, "/users/123", Method::GET).await,
+            match_resource_name(&app, "/users/123", Method::GET).await,
             Some("user".to_string())
         );
         assert_eq!(
-            match_route_name(&app, "/posts/456", Method::GET).await,
+            match_resource_name(&app, "/posts/456", Method::GET).await,
             Some("post".to_string())
         );
         assert_eq!(
-            match_route_name(&app, "/unknown", Method::GET).await,
+            match_resource_name(&app, "/unknown", Method::GET).await,
             None
         );
     }
@@ -162,11 +162,11 @@ mod tests {
         .await;
 
         assert_eq!(
-            match_route_name(&app, "/users", Method::GET).await,
+            match_resource_name(&app, "/users", Method::GET).await,
             Some("users".to_string())
         );
         assert_eq!(
-            match_route_name(&app, "/users", Method::POST).await,
+            match_resource_name(&app, "/users", Method::POST).await,
             Some("users".to_string())
         );
         assert_eq!(
@@ -187,11 +187,11 @@ mod tests {
         .await;
 
         assert_eq!(
-            match_route_name(&app, "/api/users/123", Method::GET).await,
+            match_resource_name(&app, "/api/users/123", Method::GET).await,
             Some("user".to_string())
         );
         assert_eq!(
-            match_route_name(&app, "/api/posts/456", Method::GET).await,
+            match_resource_name(&app, "/api/posts/456", Method::GET).await,
             Some("post".to_string())
         );
         assert_eq!(
@@ -219,19 +219,19 @@ mod tests {
 
         // /admin should work
         assert_eq!(
-            match_route_name(&app, "/admin", Method::GET).await,
+            match_resource_name(&app, "/admin", Method::GET).await,
             Some("admin".to_string())
         );
 
         // /public should work
         assert_eq!(
-            match_route_name(&app, "/public", Method::GET).await,
+            match_resource_name(&app, "/public", Method::GET).await,
             Some("public".to_string())
         );
 
         // Unknown path should return None
         assert_eq!(
-            match_route_name(&app, "/unknown", Method::GET).await,
+            match_resource_name(&app, "/unknown", Method::GET).await,
             None
         );
     }
@@ -249,13 +249,13 @@ mod tests {
 
         // GET should work
         assert_eq!(
-            match_route_name(&app, "/users", Method::GET).await,
+            match_resource_name(&app, "/users", Method::GET).await,
             Some("users".to_string())
         );
 
         // POST not allowed but should still match the resource
         assert_eq!(
-            match_route_name(&app, "/users", Method::POST).await,
+            match_resource_name(&app, "/users", Method::POST).await,
             Some("users".to_string())
         );
     }

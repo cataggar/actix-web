@@ -22,7 +22,7 @@
 //! - [`try_read_body_json`]
 //!
 //! # Route Matching
-//! - [`match_route_name`]
+//! - [`match_resource_name`]
 //! - [`match_route_pattern`]
 
 // TODO: more docs on generally how testing works with these parts
@@ -42,7 +42,7 @@ pub(crate) use self::test_utils::try_init_service;
 pub use self::test_utils::{read_response, read_response_json};
 pub use self::{
     test_request::TestRequest,
-    test_route_match::{match_route_name, match_route_pattern},
+    test_route_match::{match_resource_name, match_route_pattern},
     test_utils::{
         call_and_read_body, call_and_read_body_json, call_service, init_service, read_body,
         read_body_json, try_call_and_read_body_json, try_call_service, try_read_body,

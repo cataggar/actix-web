@@ -41,25 +41,25 @@ async fn test_route_verification() {
 
     // Test route names - verify that paths map to expected named routes
     assert_eq!(
-        test::match_route_name(&app, "/api/users", Method::GET).await,
+        test::match_resource_name(&app, "/api/users", Method::GET).await,
         Some("list_users".to_string()),
         "GET /api/users should route to list_users"
     );
 
     assert_eq!(
-        test::match_route_name(&app, "/api/users", Method::POST).await,
+        test::match_resource_name(&app, "/api/users", Method::POST).await,
         Some("list_users".to_string()),
         "POST /api/users should route to list_users"
     );
 
     assert_eq!(
-        test::match_route_name(&app, "/api/users/123", Method::GET).await,
+        test::match_resource_name(&app, "/api/users/123", Method::GET).await,
         Some("user_detail".to_string()),
         "GET /api/users/123 should route to user_detail"
     );
 
     assert_eq!(
-        test::match_route_name(&app, "/admin/dashboard", Method::GET).await,
+        test::match_resource_name(&app, "/admin/dashboard", Method::GET).await,
         Some("admin_dashboard".to_string()),
         "GET /admin/dashboard should route to admin_dashboard"
     );
@@ -79,7 +79,7 @@ async fn test_route_verification() {
 
     // Test non-existent routes
     assert_eq!(
-        test::match_route_name(&app, "/api/unknown", Method::GET).await,
+        test::match_resource_name(&app, "/api/unknown", Method::GET).await,
         None,
         "Non-existent route should return None"
     );
@@ -114,24 +114,24 @@ async fn test_route_method_specificity() {
 
     // Both GET and POST should route to the same named resource
     assert_eq!(
-        test::match_route_name(&app, "/resource", Method::GET).await,
+        test::match_resource_name(&app, "/resource", Method::GET).await,
         Some("my_resource".to_string())
     );
     assert_eq!(
-        test::match_route_name(&app, "/resource", Method::POST).await,
+        test::match_resource_name(&app, "/resource", Method::POST).await,
         Some("my_resource".to_string())
     );
 
     // Only GET is defined for this resource
     assert_eq!(
-        test::match_route_name(&app, "/get_only", Method::GET).await,
+        test::match_resource_name(&app, "/get_only", Method::GET).await,
         Some("get_only_resource".to_string())
     );
 
     // POST would still match the resource name, but would return 405 Method Not Allowed
     // when actually called (not tested here since we're only checking route matching)
     assert_eq!(
-        test::match_route_name(&app, "/get_only", Method::POST).await,
+        test::match_resource_name(&app, "/get_only", Method::POST).await,
         Some("get_only_resource".to_string())
     );
 
@@ -160,11 +160,11 @@ async fn test_nested_scopes() {
 
     // Different versions should route to different named routes
     assert_eq!(
-        test::match_route_name(&app, "/api/v1/users/123", Method::GET).await,
+        test::match_resource_name(&app, "/api/v1/users/123", Method::GET).await,
         Some("v1_user".to_string())
     );
     assert_eq!(
-        test::match_route_name(&app, "/api/v2/users/123", Method::GET).await,
+        test::match_resource_name(&app, "/api/v2/users/123", Method::GET).await,
         Some("v2_user".to_string())
     );
 
