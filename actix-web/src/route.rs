@@ -16,6 +16,11 @@ use crate::{
     Error, FromRequest, HttpResponse, Responder,
 };
 
+/// Marker type for storing the matched route name in request extensions.
+/// This is set during route matching and can be retrieved for testing purposes.
+#[derive(Debug, Clone)]
+pub struct MatchedRouteName(pub String);
+
 /// A request handler with [guards](guard).
 ///
 /// Route uses a builder-like pattern for configuration. If handler is not set, a `404 Not Found`
@@ -23,6 +28,7 @@ use crate::{
 pub struct Route {
     service: BoxedHttpServiceFactory,
     guards: Rc<Vec<Box<dyn Guard>>>,
+    name: Option<String>,
 }
 
 impl Route {
@@ -34,6 +40,7 @@ impl Route {
                 Ok(req.into_response(HttpResponse::NotFound()))
             })),
             guards: Rc::new(Vec::new()),
+            name: None,
         }
     }
 
@@ -59,6 +66,7 @@ impl Route {
         Route {
             service: boxed::factory(apply(Compat::new(mw), self.service)),
             guards: self.guards,
+            name: self.name,
         }
     }
 
@@ -78,10 +86,11 @@ impl ServiceFactory<ServiceRequest> for Route {
     fn new_service(&self, _: ()) -> Self::Future {
         let fut = self.service.new_service(());
         let guards = Rc::clone(&self.guards);
+        let name = self.name.clone();
 
         Box::pin(async move {
             let service = fut.await?;
-            Ok(RouteService { service, guards })
+            Ok(RouteService { service, guards, name })
         })
     }
 }
@@ -89,6 +98,7 @@ impl ServiceFactory<ServiceRequest> for Route {
 pub struct RouteService {
     service: BoxService<ServiceRequest, ServiceResponse, Error>,
     guards: Rc<Vec<Box<dyn Guard>>>,
+    name: Option<String>,
 }
 
 impl RouteService {
@@ -103,6 +113,11 @@ impl RouteService {
             }
         }
         true
+    }
+
+    /// Get the route name if one has been set.
+    pub fn name(&self) -> Option<&str> {
+        self.name.as_deref()
     }
 }
 
@@ -157,6 +172,29 @@ impl Route {
     pub fn guard<F: Guard + 'static>(mut self, f: F) -> Self {
         Rc::get_mut(&mut self.guards).unwrap().push(Box::new(f));
         self
+    }
+
+    /// Set route name.
+    ///
+    /// Name can be used for URL generation within resource.
+    ///
+    /// # Examples
+    /// ```
+    /// use actix_web::{web, App, HttpResponse};
+    ///
+    /// let app = App::new().service(
+    ///     web::resource("/test")
+    ///         .route(web::get().name("get-handler").to(|| HttpResponse::Ok()))
+    /// );
+    /// ```
+    pub fn name(mut self, name: &str) -> Self {
+        self.name = Some(name.to_string());
+        self
+    }
+
+    /// Get route name if it has been set.
+    pub fn get_name(&self) -> Option<&str> {
+        self.name.as_deref()
     }
 
     /// Set handler function, use request extractors for parameters.
@@ -277,6 +315,7 @@ mod tests {
     use crate::{
         dev::{always_ready, fn_factory, fn_service, Service},
         error,
+        guard,
         http::{header, Method, StatusCode},
         middleware::{DefaultHeaders, Logger},
         service::{ServiceRequest, ServiceResponse},
@@ -452,6 +491,89 @@ mod tests {
         assert_eq!(
             body,
             Bytes::from_static(b"Goodbye, and thanks for all the fish!")
+        );
+    }
+
+    #[actix_rt::test]
+    async fn test_named_routes() {
+        let srv = init_service(
+            App::new().service(
+                web::resource("/test")
+                    .route(web::get().name("get-test").to(|| async { "GET" }))
+                    .route(web::post().name("post-test").to(|| async { "POST" }))
+                    .route(web::put().to(|| async { "PUT" })), // unnamed route
+            ),
+        )
+        .await;
+
+        // Test GET route with name
+        let req = TestRequest::get().uri("/test").to_request();
+        let resp = call_service(&srv, req).await;
+        assert_eq!(resp.status(), StatusCode::OK);
+        assert_eq!(
+            crate::test::matched_route_name(&resp).as_deref(),
+            Some("get-test")
+        );
+
+        // Test POST route with name
+        let req = TestRequest::post().uri("/test").to_request();
+        let resp = call_service(&srv, req).await;
+        assert_eq!(resp.status(), StatusCode::OK);
+        assert_eq!(
+            crate::test::matched_route_name(&resp).as_deref(),
+            Some("post-test")
+        );
+
+        // Test PUT route without name
+        let req = TestRequest::put().uri("/test").to_request();
+        let resp = call_service(&srv, req).await;
+        assert_eq!(resp.status(), StatusCode::OK);
+        assert_eq!(crate::test::matched_route_name(&resp), None);
+    }
+
+    #[actix_rt::test]
+    async fn test_named_route_with_guards() {
+        let srv = init_service(
+            App::new().service(
+                web::resource("/test")
+                    .route(
+                        web::get()
+                            .name("json-get")
+                            .guard(guard::Header("content-type", "application/json"))
+                            .to(|| async { "JSON GET" }),
+                    )
+                    .route(
+                        web::get()
+                            .name("plain-get")
+                            .guard(guard::Header("content-type", "text/plain"))
+                            .to(|| async { "PLAIN GET" }),
+                    ),
+            ),
+        )
+        .await;
+
+        // Test with JSON content-type
+        let req = TestRequest::get()
+            .uri("/test")
+            .insert_header((header::CONTENT_TYPE, "application/json"))
+            .to_request();
+        let resp = call_service(&srv, req).await;
+        assert_eq!(resp.status(), StatusCode::OK);
+        assert_eq!(
+            crate::test::matched_route_name(&resp).as_deref(),
+            Some("json-get")
+        );
+
+        // Test with plain text content-type
+        let req = TestRequest::get()
+            .uri("/test")
+            .insert_header((header::CONTENT_TYPE, "text/plain"))
+            .to_request();
+        let resp = call_service(&srv, req).await;
+        assert_eq!(resp.status(), StatusCode::OK);
+        assert_eq!(
+            crate::test::matched_route_name(&resp).as_deref(),
+            Some("plain-get")
         );
     }
 }
