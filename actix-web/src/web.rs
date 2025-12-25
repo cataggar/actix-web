@@ -95,6 +95,28 @@ pub fn scope(path: &str) -> Scope {
 }
 
 /// Creates a new un-configured route.
+///
+/// # Examples
+///
+/// Basic route:
+/// ```
+/// use actix_web::{web, App, HttpResponse};
+///
+/// let app = App::new().service(
+///     web::resource("/test")
+///         .route(web::route().to(|| HttpResponse::Ok()))
+/// );
+/// ```
+///
+/// Named route for testing:
+/// ```
+/// use actix_web::{web, App, HttpResponse};
+///
+/// let app = App::new().service(
+///     web::resource("/test")
+///         .route(web::route().name("test-route").to(|| HttpResponse::Ok()))
+/// );
+/// ```
 pub fn route() -> Route {
     Route::new()
 }

@@ -20,6 +20,9 @@
 //! - [`try_read_body`]
 //! - [`read_body_json`]
 //! - [`try_read_body_json`]
+//!
+//! # Testing Route Matching
+//! - [`matched_route_name`]: Extract the matched route name from a request for testing
 
 // TODO: more docs on generally how testing works with these parts
 
@@ -43,6 +46,40 @@ pub use self::{
         try_read_body_json,
     },
 };
+
+use crate::{route::MatchedRouteName, HttpMessage};
+
+/// Extracts the matched route name from a service request.
+///
+/// Returns the name of the route that matched this request, if any route with a name was matched.
+/// This is primarily useful for testing route matching logic without executing handlers.
+///
+/// # Examples
+/// ```
+/// use actix_web::{test, web, App, HttpResponse};
+///
+/// #[actix_web::test]
+/// async fn test_route_matching() {
+///     let app = test::init_service(
+///         App::new().service(
+///             web::resource("/test")
+///                 .route(web::get().name("get-test").to(|| HttpResponse::Ok()))
+///                 .route(web::post().name("post-test").to(|| HttpResponse::Created()))
+///         )
+///     ).await;
+///
+///     let req = test::TestRequest::get().uri("/test").to_request();
+///     let resp = test::call_service(&app, req).await;
+///
+///     assert_eq!(test::matched_route_name(&resp).as_deref(), Some("get-test"));
+/// }
+/// ```
+pub fn matched_route_name<B>(res: &crate::service::ServiceResponse<B>) -> Option<String> {
+    res.request()
+        .extensions()
+        .get::<MatchedRouteName>()
+        .map(|m| m.0.clone())
+}
 
 /// Reduces boilerplate code when testing expected response payloads.
 ///

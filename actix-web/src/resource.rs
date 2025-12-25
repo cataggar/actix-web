@@ -492,6 +492,19 @@ pub struct ResourceService {
     default: BoxedHttpService,
 }
 
+impl ResourceService {
+    /// Finds the name of the route that would match the given request without calling it.
+    /// This is useful for testing route matching logic.
+    pub fn match_route_name(&self, req: &mut ServiceRequest) -> Option<&str> {
+        for route in &self.routes {
+            if route.check(req) {
+                return route.name();
+            }
+        }
+        None
+    }
+}
+
 impl Service<ServiceRequest> for ResourceService {
     type Response = ServiceResponse;
     type Error = Error;
@@ -502,6 +515,12 @@ impl Service<ServiceRequest> for ResourceService {
     fn call(&self, mut req: ServiceRequest) -> Self::Future {
         for route in &self.routes {
             if route.check(&mut req) {
+                // Store the matched route name in request extensions for testing
+                if let Some(name) = route.name() {
+                    use crate::HttpMessage;
+                    req.extensions_mut()
+                        .insert(crate::route::MatchedRouteName(name.to_string()));
+                }
                 return route.call(req);
             }
         }
