@@ -90,7 +90,11 @@ impl ServiceFactory<ServiceRequest> for Route {
 
         Box::pin(async move {
             let service = fut.await?;
-            Ok(RouteService { service, guards, name })
+            Ok(RouteService {
+                service,
+                guards,
+                name,
+            })
         })
     }
 }
@@ -314,8 +318,7 @@ mod tests {
 
     use crate::{
         dev::{always_ready, fn_factory, fn_service, Service},
-        error,
-        guard,
+        error, guard,
         http::{header, Method, StatusCode},
         middleware::{DefaultHeaders, Logger},
         service::{ServiceRequest, ServiceResponse},
@@ -574,6 +577,97 @@ mod tests {
         assert_eq!(
             crate::test::matched_route_name(&resp).as_deref(),
             Some("plain-get")
+        );
+    }
+
+    #[actix_rt::test]
+    async fn test_multiple_resources_with_named_routes() {
+        let srv = init_service(
+            App::new()
+                .service(
+                    web::resource("/users")
+                        .route(web::get().name("list-users").to(|| async { "Users list" }))
+                        .route(
+                            web::post()
+                                .name("create-user")
+                                .to(|| async { "User created" }),
+                        ),
+                )
+                .service(
+                    web::resource("/posts")
+                        .route(web::get().name("list-posts").to(|| async { "Posts list" }))
+                        .route(
+                            web::post()
+                                .name("create-post")
+                                .to(|| async { "Post created" }),
+                        ),
+                ),
+        )
+        .await;
+
+        // Test users resource
+        let req = TestRequest::get().uri("/users").to_request();
+        let resp = call_service(&srv, req).await;
+        assert_eq!(
+            crate::test::matched_route_name(&resp).as_deref(),
+            Some("list-users")
+        );
+
+        let req = TestRequest::post().uri("/users").to_request();
+        let resp = call_service(&srv, req).await;
+        assert_eq!(
+            crate::test::matched_route_name(&resp).as_deref(),
+            Some("create-user")
+        );
+
+        // Test posts resource
+        let req = TestRequest::get().uri("/posts").to_request();
+        let resp = call_service(&srv, req).await;
+        assert_eq!(
+            crate::test::matched_route_name(&resp).as_deref(),
+            Some("list-posts")
+        );
+
+        let req = TestRequest::post().uri("/posts").to_request();
+        let resp = call_service(&srv, req).await;
+        assert_eq!(
+            crate::test::matched_route_name(&resp).as_deref(),
+            Some("create-post")
+        );
+    }
+
+    #[actix_rt::test]
+    async fn test_route_naming_builder_pattern() {
+        // Verify that naming works well in builder pattern with other methods
+        let srv = init_service(
+            App::new().service(
+                web::resource("/test")
+                    .route(
+                        web::post()
+                            .name("complex-route")
+                            .guard(guard::Header("x-custom", "value"))
+                            .to(|| async { "Complex" }),
+                    )
+                    .route(web::get().name("simple-route").to(|| async { "Simple" })),
+            ),
+        )
+        .await;
+
+        let req = TestRequest::get().uri("/test").to_request();
+        let resp = call_service(&srv, req).await;
+        assert_eq!(
+            crate::test::matched_route_name(&resp).as_deref(),
+            Some("simple-route")
+        );
+
+        let req = TestRequest::post()
+            .uri("/test")
+            .insert_header(("x-custom", "value"))
+            .to_request();
+        let resp = call_service(&srv, req).await;
+        assert_eq!(
+            crate::test::matched_route_name(&resp).as_deref(),
+            Some("complex-route")
         );
     }
 }

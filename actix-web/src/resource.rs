@@ -518,7 +518,8 @@ impl Service<ServiceRequest> for ResourceService {
                 // Store the matched route name in request extensions for testing
                 if let Some(name) = route.name() {
                     use crate::HttpMessage;
-                    req.extensions_mut().insert(crate::route::MatchedRouteName(name.to_string()));
+                    req.extensions_mut()
+                        .insert(crate::route::MatchedRouteName(name.to_string()));
                 }
                 return route.call(req);
             }
