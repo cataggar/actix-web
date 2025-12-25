@@ -1,10 +1,16 @@
 use super::{Guard, GuardContext};
 
-/// A guard that matches requests based on an `api_version` path parameter.
+/// A guard that matches requests based on an API version in the URL path.
 ///
-/// This guard checks if the `api_version` path parameter matches any of the specified
-/// accepted versions. It's useful for routing requests to different handlers based on
-/// API version.
+/// This guard checks if the API version segment in the path matches any of the specified
+/// accepted versions. It's designed for API versioning patterns where the version is part
+/// of the URL path.
+///
+/// # Path Format
+/// This guard expects paths in the format `/api/{version}/...` where the version appears
+/// as the second path segment after `/api/`. For example:
+/// - `/api/2024-09-01/users`
+/// - `/api/2025-09-01-preview/items`
 ///
 /// # Examples
 /// ```
@@ -20,6 +26,11 @@ use super::{Guard, GuardContext};
 ///     .guard(guard::ApiVersion("2025-09-01").or_version("2025-09-01-preview"))
 ///     .route(web::get().to(|| async { HttpResponse::Ok().body("2025-09-01 items") }));
 /// ```
+///
+/// # Note
+/// The guard extracts the version directly from the URI path during routing,
+/// before path parameters are populated. This means it checks the literal path segment
+/// rather than using the route's path parameter extraction.
 #[allow(non_snake_case)]
 pub fn ApiVersion(version: impl Into<String>) -> ApiVersionGuard {
     ApiVersionGuard {
@@ -27,7 +38,10 @@ pub fn ApiVersion(version: impl Into<String>) -> ApiVersionGuard {
     }
 }
 
-/// A guard that checks if the `api_version` path parameter matches one of the accepted versions.
+/// A guard that checks if the API version in the path matches one of the accepted versions.
+///
+/// This guard is designed for use with paths in the format `/api/{version}/...`
+/// where the version is the second path segment.
 ///
 /// Construct an `ApiVersionGuard` using [`ApiVersion`].
 #[derive(Debug, Clone)]
