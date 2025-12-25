@@ -2,7 +2,7 @@
 
 This example demonstrates a complete REST API built with actix-web that showcases:
 
-- **Dependency Injection**: Using the `fundle` crate for compile-time safe dependency injection
+- **Dependency Injection**: Using the `fundle` crate for compile-time safe dependency injection with trait-based service abstraction
 - **Error Handling**: Custom error handling patterns inspired by the `ohno` crate
 - **Database Access**: Using `sea-orm` ORM for async database operations
 - **Multi-Database Support**: SQLite for development/testing and PostgreSQL for production
@@ -10,6 +10,7 @@ This example demonstrates a complete REST API built with actix-web that showcase
 ## Features
 
 - Full CRUD operations (Create, Read, Update, Delete) for a User entity
+- Trait-based service layer with injected dependencies
 - Type-safe dependency injection with `fundle`
 - Clean error handling with custom error types
 - Async database operations with `sea-orm`
@@ -119,26 +120,66 @@ The example is organized into several key sections:
 1. **Error Handling**: Custom `AppError` type that implements `actix_web::ResponseError`
 2. **Database Entities**: Sea-ORM entity definitions for the User model
 3. **DTOs**: Data Transfer Objects for API requests/responses
-4. **Application State**: `AppState` bundle managed by fundle for dependency injection
-5. **Service Layer**: `UserService` with business logic and database operations
-6. **HTTP Handlers**: Actix-web route handlers that use the service layer
+4. **Service Layer**: `UserServiceTrait` and `UserService` with injected dependencies
+5. **Application State**: `AppState` bundle managed by fundle for dependency injection
+6. **HTTP Handlers**: Actix-web route handlers that use the injected service
 7. **Database Setup**: Automatic schema creation supporting both SQLite and PostgreSQL
 
 ## Key Concepts Demonstrated
 
 ### Dependency Injection with fundle
 
-The `AppState` struct is annotated with `#[bundle]` to enable fundle's dependency injection:
+The example demonstrates a layered dependency injection approach:
+
+1. **Service with Injected Dependencies**: The `UserService` has the database connection injected:
+
+```rust
+pub struct UserService {
+    db: DatabaseConnection,
+}
+
+impl UserService {
+    pub fn new(db: DatabaseConnection) -> Self {
+        Self { db }
+    }
+}
+```
+
+2. **Trait-Based Abstraction**: Services implement traits for better testability:
+
+```rust
+pub trait UserServiceTrait: Send + Sync {
+    fn create_user(&self, dto: CreateUserDto) 
+        -> impl Future<Output = Result<entity::Model, AppError>> + Send;
+    // ... other methods
+}
+
+impl UserServiceTrait for UserService {
+    // Implementation with access to self.db
+}
+```
+
+3. **Application State Bundle**: The service itself is injected into the application state:
 
 ```rust
 #[bundle]
 #[derive(Clone)]
 pub struct AppState {
-    pub db: DatabaseConnection,
+    pub user_service: UserService,
 }
+
+// Usage in main:
+let user_service = UserService::new(db);
+let state = AppState::builder()
+    .user_service(|_| user_service.clone())
+    .build();
 ```
 
-This generates a type-safe builder that ensures all dependencies are properly initialized at compile-time.
+This approach provides:
+- Compile-time verification of all dependencies
+- Easy testing through trait mocking
+- Clean separation of concerns
+- No runtime dependency injection overhead
 
 ### Error Handling
 
@@ -157,13 +198,13 @@ These errors are automatically converted to appropriate HTTP responses through t
 
 ### Async Database Operations
 
-All database operations are fully async, leveraging sea-orm's async capabilities:
+All database operations are fully async, leveraging sea-orm's async capabilities. The service methods have access to the injected database connection through `self.db`:
 
 ```rust
-pub async fn create_user(
-    db: &DatabaseConnection,
-    dto: CreateUserDto,
-) -> Result<entity::Model, AppError>
+async fn create_user(&self, dto: CreateUserDto) -> Result<entity::Model, AppError> {
+    let user = entity::ActiveModel { /* ... */ };
+    user.insert(&self.db).await?
+}
 ```
 
 No blocking operations or thread pools needed - everything works seamlessly with actix-web's async runtime.

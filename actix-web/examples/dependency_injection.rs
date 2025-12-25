@@ -148,28 +148,54 @@ impl From<entity::Model> for UserResponse {
 }
 
 // ============================================================================
-// Application State with fundle for Dependency Injection
-// ============================================================================
-
-/// Application state bundle managed by fundle
-#[bundle]
-#[derive(Clone)]
-pub struct AppState {
-    /// Database connection managed by sea-orm
-    pub db: DatabaseConnection,
-}
-
-// ============================================================================
 // Database Service Layer
 // ============================================================================
 
-pub struct UserService;
+/// Trait defining user service operations
+/// 
+/// This trait allows for dependency injection of the service itself,
+/// making the code more testable and following SOLID principles.
+pub trait UserServiceTrait: Send + Sync {
+    fn create_user(
+        &self,
+        dto: CreateUserDto,
+    ) -> impl std::future::Future<Output = Result<entity::Model, AppError>> + Send;
+
+    fn get_all_users(
+        &self,
+    ) -> impl std::future::Future<Output = Result<Vec<entity::Model>, AppError>> + Send;
+
+    fn get_user_by_id(
+        &self,
+        id: i32,
+    ) -> impl std::future::Future<Output = Result<entity::Model, AppError>> + Send;
+
+    fn update_user(
+        &self,
+        id: i32,
+        dto: UpdateUserDto,
+    ) -> impl std::future::Future<Output = Result<entity::Model, AppError>> + Send;
+
+    fn delete_user(
+        &self,
+        id: i32,
+    ) -> impl std::future::Future<Output = Result<(), AppError>> + Send;
+}
+
+/// Implementation of UserService with injected database connection
+#[derive(Clone)]
+pub struct UserService {
+    db: DatabaseConnection,
+}
 
 impl UserService {
-    pub async fn create_user(
-        db: &DatabaseConnection,
-        dto: CreateUserDto,
-    ) -> Result<entity::Model, AppError> {
+    pub fn new(db: DatabaseConnection) -> Self {
+        Self { db }
+    }
+}
+
+impl UserServiceTrait for UserService {
+    async fn create_user(&self, dto: CreateUserDto) -> Result<entity::Model, AppError> {
         log::info!("Creating user: {}", dto.name);
         
         let user = entity::ActiveModel {
@@ -178,34 +204,29 @@ impl UserService {
             ..Default::default()
         };
 
-        user.insert(db)
+        user.insert(&self.db)
             .await
             .map_err(|e| AppError::Database {
                 message: e.to_string(),
             })
     }
 
-    pub async fn get_all_users(
-        db: &DatabaseConnection,
-    ) -> Result<Vec<entity::Model>, AppError> {
+    async fn get_all_users(&self) -> Result<Vec<entity::Model>, AppError> {
         log::info!("Getting all users");
         
         entity::Entity::find()
-            .all(db)
+            .all(&self.db)
             .await
             .map_err(|e| AppError::Database {
                 message: e.to_string(),
             })
     }
 
-    pub async fn get_user_by_id(
-        db: &DatabaseConnection,
-        id: i32,
-    ) -> Result<entity::Model, AppError> {
+    async fn get_user_by_id(&self, id: i32) -> Result<entity::Model, AppError> {
         log::info!("Getting user by id: {}", id);
         
         entity::Entity::find_by_id(id)
-            .one(db)
+            .one(&self.db)
             .await
             .map_err(|e| AppError::Database {
                 message: e.to_string(),
@@ -213,33 +234,29 @@ impl UserService {
             .ok_or_else(|| AppError::NotFound { id })
     }
 
-    pub async fn update_user(
-        db: &DatabaseConnection,
-        id: i32,
-        dto: UpdateUserDto,
-    ) -> Result<entity::Model, AppError> {
+    async fn update_user(&self, id: i32, dto: UpdateUserDto) -> Result<entity::Model, AppError> {
         log::info!("Updating user: {}", id);
         
-        let user = Self::get_user_by_id(db, id).await?;
+        let user = self.get_user_by_id(id).await?;
 
         let mut user: entity::ActiveModel = user.into();
         user.name = ActiveValue::Set(dto.name);
         user.email = ActiveValue::Set(dto.email);
 
-        user.update(db)
+        user.update(&self.db)
             .await
             .map_err(|e| AppError::Database {
                 message: e.to_string(),
             })
     }
 
-    pub async fn delete_user(db: &DatabaseConnection, id: i32) -> Result<(), AppError> {
+    async fn delete_user(&self, id: i32) -> Result<(), AppError> {
         log::info!("Deleting user: {}", id);
         
-        let user = Self::get_user_by_id(db, id).await?;
+        let user = self.get_user_by_id(id).await?;
         let user: entity::ActiveModel = user.into();
 
-        user.delete(db)
+        user.delete(&self.db)
             .await
             .map_err(|e| AppError::Database {
                 message: e.to_string(),
@@ -247,6 +264,22 @@ impl UserService {
 
         Ok(())
     }
+}
+
+// ============================================================================
+// Application State with fundle for Dependency Injection
+// ============================================================================
+
+/// Application state bundle managed by fundle
+/// 
+/// This demonstrates dependency injection where the service itself is injected,
+/// not just individual dependencies. The UserService already has the database
+/// connection injected into it, showcasing a layered DI approach.
+#[bundle]
+#[derive(Clone)]
+pub struct AppState {
+    /// User service with injected database connection
+    pub user_service: UserService,
 }
 
 // ============================================================================
@@ -258,13 +291,13 @@ async fn create_user(
     state: web::Data<AppState>,
     dto: web::Json<CreateUserDto>,
 ) -> Result<impl Responder, AppError> {
-    let user = UserService::create_user(&state.db, dto.into_inner()).await?;
+    let user = state.user_service.create_user(dto.into_inner()).await?;
     Ok(web::Json(UserResponse::from(user)))
 }
 
 #[get("/users")]
 async fn list_users(state: web::Data<AppState>) -> Result<impl Responder, AppError> {
-    let users = UserService::get_all_users(&state.db).await?;
+    let users = state.user_service.get_all_users().await?;
     let response: Vec<UserResponse> = users.into_iter().map(UserResponse::from).collect();
     Ok(web::Json(response))
 }
@@ -275,7 +308,7 @@ async fn get_user(
     path: web::Path<i32>,
 ) -> Result<impl Responder, AppError> {
     let id = path.into_inner();
-    let user = UserService::get_user_by_id(&state.db, id).await?;
+    let user = state.user_service.get_user_by_id(id).await?;
     Ok(web::Json(UserResponse::from(user)))
 }
 
@@ -286,7 +319,7 @@ async fn update_user(
     dto: web::Json<UpdateUserDto>,
 ) -> Result<impl Responder, AppError> {
     let id = path.into_inner();
-    let user = UserService::update_user(&state.db, id, dto.into_inner()).await?;
+    let user = state.user_service.update_user(id, dto.into_inner()).await?;
     Ok(web::Json(UserResponse::from(user)))
 }
 
@@ -296,7 +329,7 @@ async fn delete_user(
     path: web::Path<i32>,
 ) -> Result<impl Responder, AppError> {
     let id = path.into_inner();
-    UserService::delete_user(&state.db, id).await?;
+    state.user_service.delete_user(id).await?;
     Ok(HttpResponse::NoContent())
 }
 
@@ -370,11 +403,16 @@ async fn main() -> std::io::Result<()> {
         .await
         .expect("Failed to setup database");
 
+    // Create user service with injected database connection
+    let user_service = UserService::new(db);
+
     // Build application state using fundle
-    // The closure `|_| db.clone()` is the fundle pattern for setting a field
-    // that doesn't depend on other fields in the builder. The underscore
-    // indicates we're not using the builder reference.
-    let state = AppState::builder().db(|_| db.clone()).build();
+    // This demonstrates dependency injection where the service itself is injected.
+    // The closure `|_| user_service.clone()` is the fundle pattern for setting a field
+    // that doesn't depend on other fields in the builder.
+    let state = AppState::builder()
+        .user_service(|_| user_service.clone())
+        .build();
 
     log::info!("Starting HTTP server at http://127.0.0.1:8080");
 
