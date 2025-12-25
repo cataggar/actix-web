@@ -3,7 +3,7 @@
 This example demonstrates a complete REST API built with actix-web that showcases:
 
 - **Dependency Injection**: Using the `fundle` crate for compile-time safe dependency injection with trait-based service abstraction
-- **Error Handling**: Custom error handling patterns inspired by the `ohno` crate
+- **Error Handling**: Using the `ohno` crate for rich error types with automatic trait implementations
 - **Database Access**: Using `sea-orm` ORM for async database operations
 - **Multi-Database Support**: SQLite for development/testing and PostgreSQL for production
 
@@ -12,7 +12,7 @@ This example demonstrates a complete REST API built with actix-web that showcase
 - Full CRUD operations (Create, Read, Update, Delete) for a User entity
 - Trait-based service layer with injected dependencies
 - Type-safe dependency injection with `fundle`
-- Clean error handling with custom error types
+- Rich error handling with `ohno` error types
 - Async database operations with `sea-orm`
 - Automatic database schema creation
 - Environment-based database configuration
@@ -22,7 +22,7 @@ This example demonstrates a complete REST API built with actix-web that showcase
 The example uses these key crates:
 
 - **`fundle`** (v0.3): Compile-time safe dependency injection framework
-- **`ohno`** (v0.2): Error handling library (included in dependencies to demonstrate integration)
+- **`ohno`** (v0.2): Error handling library with automatic trait implementations
 - **`sea-orm`** (v2.0.0-rc.22): Async ORM with SQLite and PostgreSQL support
 - **`actix-web`** (v4): The web framework
 
@@ -181,18 +181,36 @@ This approach provides:
 - Clean separation of concerns
 - No runtime dependency injection overhead
 
-### Error Handling
+### Error Handling with ohno
 
-Custom error types provide clear, structured error responses:
+The example uses the `ohno` crate for rich error types with automatic trait implementations:
 
 ```rust
+// Individual error types using ohno
+#[ohno::error]
+pub struct DatabaseError {
+    pub message: String,
+}
+
+#[ohno::error]
+pub struct NotFoundError {
+    pub id: i32,
+}
+
+// Application error enum consolidating all error types
 #[derive(Debug)]
 pub enum AppError {
-    Database { message: String },
-    NotFound { id: i32 },
-    InvalidInput { message: String },
+    Database(DatabaseError),
+    NotFound(NotFoundError),
+    InvalidInput(InvalidInputError),
 }
 ```
+
+Benefits of using `ohno`:
+- Automatic implementation of `Error`, `Display`, and `Debug` traits
+- Built-in backtrace capture for debugging
+- Easy error chaining and context enrichment
+- Reduced boilerplate compared to manual implementations
 
 These errors are automatically converted to appropriate HTTP responses through the `ResponseError` trait.
 

@@ -49,32 +49,72 @@ use std::env;
 use std::fmt;
 
 // ============================================================================
-// Error Handling
+// Error Handling with ohno
 // ============================================================================
 
-/// Application error type with custom error handling
-/// 
-/// This example demonstrates error handling patterns. While we include ohno
-/// in dependencies to show it can be used, we use a simpler approach here
-/// for clarity in the example.
+/// Database error using ohno
+#[ohno::error]
+pub struct DatabaseError {
+    pub message: String,
+}
+
+/// Not found error using ohno
+#[ohno::error]
+pub struct NotFoundError {
+    pub id: i32,
+}
+
+/// Invalid input error using ohno
+#[ohno::error]
+pub struct InvalidInputError {
+    pub message: String,
+}
+
+/// Application error type consolidating all error types
 #[derive(Debug)]
 pub enum AppError {
-    Database { message: String },
-    NotFound { id: i32 },
-    InvalidInput { message: String },
+    Database(DatabaseError),
+    NotFound(NotFoundError),
+    InvalidInput(InvalidInputError),
 }
 
 impl fmt::Display for AppError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            AppError::Database { message } => write!(f, "Database error: {}", message),
-            AppError::NotFound { id } => write!(f, "User not found with id: {}", id),
-            AppError::InvalidInput { message } => write!(f, "Invalid input: {}", message),
+            AppError::Database(e) => write!(f, "Database error: {}", e.message),
+            AppError::NotFound(e) => write!(f, "User not found with id: {}", e.id),
+            AppError::InvalidInput(e) => write!(f, "Invalid input: {}", e.message),
         }
     }
 }
 
-impl std::error::Error for AppError {}
+impl std::error::Error for AppError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            AppError::Database(e) => Some(e),
+            AppError::NotFound(e) => Some(e),
+            AppError::InvalidInput(e) => Some(e),
+        }
+    }
+}
+
+impl From<DatabaseError> for AppError {
+    fn from(e: DatabaseError) -> Self {
+        AppError::Database(e)
+    }
+}
+
+impl From<NotFoundError> for AppError {
+    fn from(e: NotFoundError) -> Self {
+        AppError::NotFound(e)
+    }
+}
+
+impl From<InvalidInputError> for AppError {
+    fn from(e: InvalidInputError) -> Self {
+        AppError::InvalidInput(e)
+    }
+}
 
 impl actix_web::ResponseError for AppError {
     fn error_response(&self) -> HttpResponse {
@@ -210,9 +250,7 @@ impl UserServiceTrait for UserService {
 
         user.insert(&self.db)
             .await
-            .map_err(|e| AppError::Database {
-                message: e.to_string(),
-            })
+            .map_err(|e| AppError::from(DatabaseError::new(e.to_string())))
     }
 
     async fn get_all_users(&self) -> Result<Vec<entity::Model>, AppError> {
@@ -221,9 +259,7 @@ impl UserServiceTrait for UserService {
         entity::Entity::find()
             .all(&self.db)
             .await
-            .map_err(|e| AppError::Database {
-                message: e.to_string(),
-            })
+            .map_err(|e| AppError::from(DatabaseError::new(e.to_string())))
     }
 
     async fn get_user_by_id(&self, id: i32) -> Result<entity::Model, AppError> {
@@ -232,10 +268,8 @@ impl UserServiceTrait for UserService {
         entity::Entity::find_by_id(id)
             .one(&self.db)
             .await
-            .map_err(|e| AppError::Database {
-                message: e.to_string(),
-            })?
-            .ok_or_else(|| AppError::NotFound { id })
+            .map_err(|e| AppError::from(DatabaseError::new(e.to_string())))?
+            .ok_or_else(|| AppError::from(NotFoundError::new(id)))
     }
 
     async fn update_user(&self, id: i32, dto: UpdateUserDto) -> Result<entity::Model, AppError> {
@@ -249,9 +283,7 @@ impl UserServiceTrait for UserService {
 
         user.update(&self.db)
             .await
-            .map_err(|e| AppError::Database {
-                message: e.to_string(),
-            })
+            .map_err(|e| AppError::from(DatabaseError::new(e.to_string())))
     }
 
     async fn delete_user(&self, id: i32) -> Result<(), AppError> {
@@ -262,9 +294,7 @@ impl UserServiceTrait for UserService {
 
         user.delete(&self.db)
             .await
-            .map_err(|e| AppError::Database {
-                message: e.to_string(),
-            })?;
+            .map_err(|e| AppError::from(DatabaseError::new(e.to_string())))?;
 
         Ok(())
     }
@@ -363,17 +393,13 @@ async fn setup_database(db: &DatabaseConnection) -> Result<(), AppError> {
             )"#
         }
         _ => {
-            return Err(AppError::Database {
-                message: "Unsupported database backend".to_string(),
-            });
+            return Err(AppError::from(DatabaseError::new("Unsupported database backend".to_string())));
         }
     };
 
     db.execute_unprepared(create_table_sql)
         .await
-        .map_err(|e| AppError::Database {
-            message: format!("Failed to create table: {}", e),
-        })?;
+        .map_err(|e| AppError::from(DatabaseError::new(format!("Failed to create table: {}", e))))?;
 
     Ok(())
 }
