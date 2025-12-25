@@ -209,6 +209,31 @@ async fn create_user(&self, dto: CreateUserDto) -> Result<entity::Model, AppErro
 
 No blocking operations or thread pools needed - everything works seamlessly with actix-web's async runtime.
 
+### Connection Pooling
+
+**Important**: `DatabaseConnection` is a handle to a connection pool, not a single database connection.
+
+- **Cloning is cheap**: When you clone a `DatabaseConnection`, you're creating another reference to the *same* underlying pool, not creating a new pool.
+- **Shared pool**: All clones share the same connection pool configuration (max connections, timeouts, etc.).
+- **Thread-safe**: Safe to clone and share across services, workers, and async tasks.
+- **Automatic management**: Connections are automatically acquired from the pool when needed and returned after use.
+
+Example with custom pool configuration:
+```rust
+use sea_orm::ConnectOptions;
+use std::time::Duration;
+
+let mut opt = ConnectOptions::new("******localhost/mydb");
+opt.max_connections(100)
+   .min_connections(5)
+   .connect_timeout(Duration::from_secs(8))
+   .idle_timeout(Duration::from_secs(300));
+
+let db = Database::connect(opt).await?;
+```
+
+In this example, we use the default pool settings, which are suitable for most use cases.
+
 ## Testing
 
 To test the example:

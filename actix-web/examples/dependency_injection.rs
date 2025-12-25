@@ -183,6 +183,10 @@ pub trait UserServiceTrait: Send + Sync {
 }
 
 /// Implementation of UserService with injected database connection
+/// 
+/// Note: DatabaseConnection is a handle to a connection pool, not a single connection.
+/// Cloning it is cheap and creates another reference to the same underlying pool,
+/// not a new pool. This is safe for concurrent use across multiple services/threads.
 #[derive(Clone)]
 pub struct UserService {
     db: DatabaseConnection,
@@ -394,6 +398,9 @@ async fn main() -> std::io::Result<()> {
     }
 
     // Connect to database
+    // DatabaseConnection is a handle to a connection pool (managed by SQLx under the hood).
+    // The default pool configuration is used here, but you can customize it with ConnectOptions
+    // to set max_connections, min_connections, connect_timeout, etc.
     let db = Database::connect(&database_url)
         .await
         .expect("Failed to connect to database");
@@ -404,12 +411,14 @@ async fn main() -> std::io::Result<()> {
         .expect("Failed to setup database");
 
     // Create user service with injected database connection
+    // The DatabaseConnection can be cloned cheaply - all clones share the same connection pool
     let user_service = UserService::new(db);
 
     // Build application state using fundle
     // This demonstrates dependency injection where the service itself is injected.
     // The closure `|_| user_service.clone()` is the fundle pattern for setting a field
     // that doesn't depend on other fields in the builder.
+    // Cloning user_service (which contains a DatabaseConnection) is safe and efficient.
     let state = AppState::builder()
         .user_service(|_| user_service.clone())
         .build();
