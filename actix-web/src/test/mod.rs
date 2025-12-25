@@ -70,7 +70,7 @@ use crate::{route::MatchedRouteName, HttpMessage};
 ///
 ///     let req = test::TestRequest::get().uri("/test").to_request();
 ///     let resp = test::call_service(&app, req).await;
-///     
+///
 ///     assert_eq!(test::matched_route_name(&resp).as_deref(), Some("get-test"));
 /// }
 /// ```
