@@ -55,14 +55,17 @@ use std::{
 };
 
 use actix_http::{header, Extensions, Method as HttpMethod, RequestHead};
+use actix_router::{Path, Url};
 
 use crate::{http::header::Header, service::ServiceRequest, HttpMessage as _};
 
 mod acceptable;
+mod api_version;
 mod host;
 
 pub use self::{
     acceptable::Acceptable,
+    api_version::{ApiVersion, ApiVersionGuard},
     host::{Host, HostGuard},
 };
 
@@ -115,6 +118,26 @@ impl<'a> GuardContext<'a> {
     #[inline]
     pub fn app_data<T: 'static>(&self) -> Option<&T> {
         self.req.app_data()
+    }
+
+    /// Returns reference to the path match information.
+    ///
+    /// This allows guards to access path parameters from the route.
+    ///
+    /// # Examples
+    /// ```
+    /// use actix_web::{guard::fn_guard, HttpResponse};
+    ///
+    /// let version_guard = fn_guard(|ctx| {
+    ///     ctx.match_info()
+    ///         .get("api-version")
+    ///         .map(|v| v == "2024-09-01")
+    ///         .unwrap_or(false)
+    /// });
+    /// ```
+    #[inline]
+    pub fn match_info(&self) -> &Path<Url> {
+        self.req.match_info()
     }
 }
 
