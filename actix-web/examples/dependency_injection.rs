@@ -371,6 +371,9 @@ async fn main() -> std::io::Result<()> {
         .expect("Failed to setup database");
 
     // Build application state using fundle
+    // The closure `|_| db.clone()` is the fundle pattern for setting a field
+    // that doesn't depend on other fields in the builder. The underscore
+    // indicates we're not using the builder reference.
     let state = AppState::builder().db(|_| db.clone()).build();
 
     log::info!("Starting HTTP server at http://127.0.0.1:8080");
