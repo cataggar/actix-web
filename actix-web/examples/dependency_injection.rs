@@ -59,12 +59,21 @@ pub struct DatabaseError;
 /// Application error type using ohno's sum error pattern
 /// 
 /// This enum consolidates different error types into a sum type.
-/// Database errors use ohno for rich error handling with backtrace support.
+/// Note: ohno's #[ohno::error] only works on structs, not enums,
+/// so we manually implement Display and Error traits for the enum
+/// while using ohno for the DatabaseError struct.
 #[derive(Debug)]
 pub enum AppError {
     Database(DatabaseError),
     NotFound { id: i32 },
     InvalidInput { message: String },
+}
+
+// Automatic conversion from DatabaseError to AppError
+impl From<DatabaseError> for AppError {
+    fn from(e: DatabaseError) -> Self {
+        AppError::Database(e)
+    }
 }
 
 impl fmt::Display for AppError {
@@ -220,7 +229,7 @@ impl UserServiceTrait for UserService {
 
         user.insert(&self.db)
             .await
-            .map_err(|e| AppError::Database(DatabaseError::caused_by(e)))
+            .map_err(|e| AppError::from(DatabaseError::caused_by(e)))
     }
 
     async fn get_all_users(&self) -> Result<Vec<entity::Model>, AppError> {
@@ -229,7 +238,7 @@ impl UserServiceTrait for UserService {
         entity::Entity::find()
             .all(&self.db)
             .await
-            .map_err(|e| AppError::Database(DatabaseError::caused_by(e)))
+            .map_err(|e| AppError::from(DatabaseError::caused_by(e)))
     }
 
     async fn get_user_by_id(&self, id: i32) -> Result<entity::Model, AppError> {
@@ -238,7 +247,7 @@ impl UserServiceTrait for UserService {
         entity::Entity::find_by_id(id)
             .one(&self.db)
             .await
-            .map_err(|e| AppError::Database(DatabaseError::caused_by(e)))?
+            .map_err(|e| AppError::from(DatabaseError::caused_by(e)))?
             .ok_or_else(|| AppError::NotFound { id })
     }
 
@@ -253,7 +262,7 @@ impl UserServiceTrait for UserService {
 
         user.update(&self.db)
             .await
-            .map_err(|e| AppError::Database(DatabaseError::caused_by(e)))
+            .map_err(|e| AppError::from(DatabaseError::caused_by(e)))
     }
 
     async fn delete_user(&self, id: i32) -> Result<(), AppError> {
@@ -264,7 +273,7 @@ impl UserServiceTrait for UserService {
 
         user.delete(&self.db)
             .await
-            .map_err(|e| AppError::Database(DatabaseError::caused_by(e)))?;
+            .map_err(|e| AppError::from(DatabaseError::caused_by(e)))?;
 
         Ok(())
     }
@@ -363,13 +372,13 @@ async fn setup_database(db: &DatabaseConnection) -> Result<(), AppError> {
             )"#
         }
         _ => {
-            return Err(AppError::Database(DatabaseError::caused_by("Unsupported database backend")));
+            return Err(AppError::from(DatabaseError::caused_by("Unsupported database backend")));
         }
     };
 
     db.execute_unprepared(create_table_sql)
         .await
-        .map_err(|e| AppError::Database(DatabaseError::caused_by(e)))?;
+        .map_err(|e| AppError::from(DatabaseError::caused_by(e)))?;
 
     Ok(())
 }

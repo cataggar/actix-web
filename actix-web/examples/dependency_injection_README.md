@@ -198,10 +198,17 @@ pub enum AppError {
     InvalidInput { message: String },
 }
 
+// Automatic conversion using From trait
+impl From<DatabaseError> for AppError {
+    fn from(e: DatabaseError) -> Self {
+        AppError::Database(e)
+    }
+}
+
 // Usage with ohno's caused_by for error chaining:
 user.insert(&self.db)
     .await
-    .map_err(|e| AppError::Database(DatabaseError::caused_by(e)))
+    .map_err(|e| AppError::from(DatabaseError::caused_by(e)))
 ```
 
 Benefits of this sum error pattern with `ohno`:
@@ -210,7 +217,9 @@ Benefits of this sum error pattern with `ohno`:
 - **Backtrace capture**: ohno automatically captures backtraces for debugging
 - **Error chaining**: `caused_by()` method chains source errors
 - **Type safety**: Each error variant can have different fields and behavior
-- **Reduced boilerplate**: No need to manually implement Error/Display for database errors
+- **Automatic conversion**: `From<DatabaseError>` allows using `?` operator and `.into()`
+
+**Note**: ohno's `#[ohno::error]` attribute only works on structs, not enums. For the `AppError` enum, we manually implement `Display` and `Error` traits while using ohno for the `DatabaseError` struct.
 
 These errors are automatically converted to appropriate HTTP responses through the `ResponseError` trait.
 
