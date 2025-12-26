@@ -183,34 +183,34 @@ This approach provides:
 
 ### Error Handling with ohno
 
-The example uses the `ohno` crate for rich error types with automatic trait implementations:
+The example uses the `ohno` crate with a sum error pattern:
 
 ```rust
-// Individual error types using ohno
+// Unit struct using ohno for database errors
 #[ohno::error]
-pub struct DatabaseError {
-    pub message: String,
-}
+pub struct DatabaseError;
 
-#[ohno::error]
-pub struct NotFoundError {
-    pub id: i32,
-}
-
-// Application error enum consolidating all error types
+// Application error enum consolidating all error types (sum type pattern)
 #[derive(Debug)]
 pub enum AppError {
     Database(DatabaseError),
-    NotFound(NotFoundError),
-    InvalidInput(InvalidInputError),
+    NotFound { id: i32 },
+    InvalidInput { message: String },
 }
+
+// Usage with ohno's caused_by for error chaining:
+user.insert(&self.db)
+    .await
+    .map_err(|e| AppError::Database(DatabaseError::caused_by(e)))
 ```
 
-Benefits of using `ohno`:
-- Automatic implementation of `Error`, `Display`, and `Debug` traits
-- Built-in backtrace capture for debugging
-- Easy error chaining and context enrichment
-- Reduced boilerplate compared to manual implementations
+Benefits of this sum error pattern with `ohno`:
+- **Sum type**: Enum consolidates different error cases into a single type
+- **Automatic Error trait**: `#[ohno::error]` provides Error trait implementation for DatabaseError
+- **Backtrace capture**: ohno automatically captures backtraces for debugging
+- **Error chaining**: `caused_by()` method chains source errors
+- **Type safety**: Each error variant can have different fields and behavior
+- **Reduced boilerplate**: No need to manually implement Error/Display for database errors
 
 These errors are automatically converted to appropriate HTTP responses through the `ResponseError` trait.
 
