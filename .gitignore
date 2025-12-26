@@ -22,3 +22,8 @@ guide/build/
 # code coverage
 /lcov.info
 /codecov.json
+
+# Example database files
+example.db
+example.db-shm
+example.db-wal
